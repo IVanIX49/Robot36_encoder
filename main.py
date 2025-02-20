@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QFileDialog, QLabel, QMessageBox,
     QSplitter, QHBoxLayout, QProgressBar, QFrame, QComboBox
 )
-from PyQt5.QtGui import QPixmap, QImage
+from PyQt5.QtGui import QPixmap, QImage, QIcon
 from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 from PyQt5.QtCore import QUrl
@@ -49,6 +49,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Robot 36 Encoder")
         self.setGeometry(100, 100, 625, 700)  # Увеличиваем размер окна
+        self.setWindowIcon(QIcon(resource_path('icon.ico')))
 
         # Основной контейнер
         self.central_widget = QWidget()
@@ -208,6 +209,13 @@ class MainWindow(QMainWindow):
                 self.media_player.play()
 
 if __name__ == "__main__":
+    def resource_path(relative_path):
+        try:
+            base_path = sys._MEIPASS
+        except Exception:
+            base_path = os.path.abspath(".")
+        return os.path.join(base_path, relative_path)
+
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
