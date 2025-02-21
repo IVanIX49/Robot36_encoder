@@ -1,9 +1,6 @@
 import os
 import sys
 import tempfile
-from dis import show_code
-from logging import critical
-
 import numpy as np
 from PIL import Image
 from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal
@@ -15,7 +12,6 @@ from PyQt5.QtWidgets import (
     QHBoxLayout, QProgressBar, QFrame, QComboBox
 )
 from pysstv.color import Robot36
-
 
 class EncodeThread(QThread):
     finished = pyqtSignal()
@@ -52,6 +48,7 @@ class EncodeThread(QThread):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.encode_thread = None
         self.setWindowTitle("Robot 36 Encoder")
         self.setGeometry(100, 100, 625, 700)  # Увеличиваем размер окна
         self.setWindowIcon(QIcon(resource_path('icon.ico')))
@@ -226,7 +223,7 @@ class MainWindow(QMainWindow):
 
     def select_image(self, index):
         """Выбор изображения из комбобокса."""
-        if index >= 0 and index < len(self.encoded_images):
+        if 0 <= index < len(self.encoded_images):
             self.current_frame = index
             self.display_image(self.encoded_images[self.current_frame])
             self.current_sound_index = index
