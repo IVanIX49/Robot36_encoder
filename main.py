@@ -1,22 +1,27 @@
+import os
 import sys
+import tempfile
+from dis import show_code
+from logging import critical
+
 import numpy as np
+from PIL import Image
+from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal
+from PyQt5.QtCore import QUrl
+from PyQt5.QtGui import QPixmap, QImage, QIcon
+from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QFileDialog, QLabel, QMessageBox,
-    QSplitter, QHBoxLayout, QProgressBar, QFrame, QComboBox
+    QHBoxLayout, QProgressBar, QFrame, QComboBox
 )
-from PyQt5.QtGui import QPixmap, QImage, QIcon
-from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal
-from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
-from PyQt5.QtCore import QUrl
-from PIL import Image
 from pysstv.color import Robot36
-import os
-import tempfile
+
 
 class EncodeThread(QThread):
     finished = pyqtSignal()
     progress = pyqtSignal(int)
     image_ready = pyqtSignal(np.ndarray)
+    error_occurred = pyqtSignal(str)
     def __init__(self, input_image, output_wav):
         super().__init__()
         self.input_image = input_image
@@ -27,7 +32,8 @@ class EncodeThread(QThread):
             self.encode_sstv_robot36(self.input_image, self.output_wav)
             self.progress.emit(100)
         except Exception as e:
-            print(f"Ошибка кодирования: {e}")
+            error_message = str(e)
+            self.error_occurred.emit(error_message)
         finally:
             self.finished.emit()
 
@@ -36,10 +42,9 @@ class EncodeThread(QThread):
         # Открываем изображение
         image = Image.open(input_image)
         # Создаем SSTV-объект (добавляем параметр bits=16)
-        sstv = Robot36(image.resize((320, 240)), 44100, 16)  # 44.1 кГц частота дискретизации, 16 бит, разрешение всегда 320х240
+        sstv = Robot36(image.resize((320, 240)), 44100, 16)  # 44.1 кГц частота дискретизации, 16 бит, разрешение всегда сводится к 320х240
         # Генерируем WAV-файл
         sstv.write_wav(output_wav)
-        print(f"✅ Файл сохранен: {output_wav}")
         # Отправляем сигнал с изображением
         resized_image = image.resize((600, 600)).convert("RGB")
         self.image_ready.emit(np.array(resized_image))
@@ -105,10 +110,13 @@ class MainWindow(QMainWindow):
         self.media_player = QMediaPlayer()
         self.media_player.stateChanged.connect(self.on_media_state_changed)
 
+
+
     def open_image(self):
         options = QFileDialog.Options()
         file_path, _ = QFileDialog.getOpenFileName(self, "Выберите изображение", "", "Images (*.png *.jpg *.jpeg);;All Files (*)", options=options)
         if file_path:
+
             # Создаем уникальное имя для WAV-файла
             temp_dir = tempfile.gettempdir()
             output_wav = os.path.join(temp_dir, f"sound_{len(self.encoded_images)}.wav")
@@ -117,19 +125,33 @@ class MainWindow(QMainWindow):
             self.encode_thread.finished.connect(self.on_encode_finished)
             self.encode_thread.progress.connect(self.on_encode_progress)
             self.encode_thread.image_ready.connect(self.on_image_ready)
-            self.encode_thread.start()
+            self.encode_thread.error_occurred.connect(self.show_error_message)
             self.image_selector.addItem(f"Изображение {len(self.encoded_images) + 1}")
             self.image_selector.setEnabled(True)
+            if self.image_selector.count() > 1:
+                self.image_selector.setCurrentIndex(self.image_selector.count()-1)
+                self.current_sound_index = self.image_selector.count() - 1
+            self.encode_thread.start()
 
+    def show_error_message(self, message):
+        QMessageBox.critical(
+            self,
+            "Ошибка",
+            f"Произошла ошибка при открытии изображения: {message}"
+        )
 
     def toggle_playback(self):
         """Переключает состояние воспроизведения/остановки."""
         if self.is_playing:
             self.stop_playback()
             self.play_stop_button.setText("Воспроизвести")
+            self.image_selector.setEnabled(True)
+            self.open_button.setEnabled(True)
         else:
             self.start_playback()
             self.play_stop_button.setText("Остановить")
+            self.image_selector.setEnabled(False)
+            self.open_button.setEnabled(False)
 
     def start_playback(self):
         """Запускает таймер для воспроизведения изображений."""
@@ -141,6 +163,8 @@ class MainWindow(QMainWindow):
         self.is_playing = True
         # Воспроизводим звук
         self.play_stop_button.setText("Остановить")
+        self.image_selector.setEnabled(False)
+        self.open_button.setEnabled(False)
         self.media_player.setMedia(QMediaContent(QUrl.fromLocalFile(self.sound_files[self.current_sound_index])))
         self.media_player.play()
 
@@ -168,6 +192,8 @@ class MainWindow(QMainWindow):
             self.play_stop_button.show()
             # Воспроизводим звук
             self.play_stop_button.setText("Остановить")
+            self.image_selector.setEnabled(False)
+            self.open_button.setEnabled(False)
             self.media_player.setMedia(QMediaContent(QUrl.fromLocalFile(self.sound_files[self.current_sound_index])))
             self.media_player.play()
 
